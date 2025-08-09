@@ -62,7 +62,7 @@ def say(text):
         return
 
 
-model = genai.GenerativeModel("gemini-2.0-flash-thinking-exp-01-21")
+model = genai.GenerativeModel("gemini-2.5-flash-lite")
 
 
 
