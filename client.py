@@ -6,17 +6,13 @@ import requests
 from PIL import Image
 from io import BytesIO
 import traceback
-from elevenlabs.client import ElevenLabs
-from elevenlabs import stream
-from pyht import Client as PlayHT
-from pyht.client import TTSOptions
+import tempfile
+import os
+import subprocess
 
 config = {
     "GEMINI_API_KEY": "", # Replace with your Google Gemini API Key
-    "ELEVENLABS_API_KEY": "", # Replace with your ElevenLabs API Key
-    "PLAYHT_API_KEY": "", # Replace with your PlayHT API Key
-    "PLAYHT_USER_ID": "", # Replace with your PlayHT User ID
-    "AUDIO": "", # Either "ElevenLabs", "PlayHT", or "" (no audio)
+    "AUDIO": "", # Either "TTS" or "" (no audio)
     "VOICE": "", # Leave this empty if you want to use the default voice
     "GOAL": "Locate the target. Then, pathfind towards the target.",
     "TARGET": "A red ball",
@@ -31,40 +27,33 @@ goal = config.get("GOAL", "Locate the target. Then, pathfind towards the target.
 target = config.get("TARGET")
 success_criteria = config.get("SUCCESS_CRITERIA", "The goal is complete when you have arrived at the target.")
 audio = config.get("AUDIO")
-if audio == "ElevenLabs":
-    elevenlabs = ElevenLabs(
-        api_key=config.get("ELEVENLABS_API_KEY", "0"),
-    )
-elif audio == "PlayHT":
-    playht = PlayHT(
-        api_key=config.get("PLAYHT_API_KEY"),
-        user_id=config.get("PLAYHT_USER_ID")
-    )
-
-    playhtoptions = TTSOptions(voice=config.get("VOICE", "s3://voice-cloning-zero-shot/775ae416-49bb-4fb6-bd45-740f205d20a1/jennifersaad/manifest.json"))
-else:
-    pass
 
 def say(text):
     if not audio:
         return
-    if audio == "ElevenLabs":
-        audio_stream = elevenlabs.text_to_speech.convert_as_stream(
-            text=text,
-            voice_id=config.get("VOICE", "JBFqnCBsd6RMkjVDRZzb"),
-            model_id="eleven_multilingual_v2"
-        )
-        stream(audio_stream)
-    elif audio == "PlayHT":
-        audio_stream = playht.tts(text, playhtoptions)
-        stream(audio_stream)
-    else:
-        return
+    
+    if audio == "TTS":
+        voice = config.get("VOICE", "en_uk_001")
+        url = f"https://tts.mce.run/audio?voice={voice}&text={requests.utils.quote(text)}"
+        
+        try:
+            response = requests.get(url)
+            if response.status_code == 200:
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as tmp_file:
+                    tmp_file.write(response.content)
+                    tmp_file_path = tmp_file.name
+                
+                subprocess.run([
+                    "ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet", tmp_file_path
+                ])
+                
+                os.unlink(tmp_file_path)
+            else:
+                print(f"Failed to get TTS audio: {response.status_code}")
+        except Exception as e:
+            print(f"Error playing audio: {e}")
 
-
-model = genai.GenerativeModel("gemini-2.5-flash-lite")
-
-
+model = genai.GenerativeModel("gemini-2.5-flash")
 
 print("Connecting to server...")
 sio = socketio.Client()
